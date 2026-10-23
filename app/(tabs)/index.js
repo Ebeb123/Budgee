@@ -63,11 +63,20 @@ export default function DashboardScreen() {
 
   // Keep the dashboard fresh when returning to it (and when the month changes):
   // rebuild the 14-day trend, the per-category ring data, and the month pie.
+  // NOTE: refresh() replaces `period` with a new object, so this effect must not
+  // depend on `period` itself (that re-ran it forever and froze the app).
+  // Refresh shared state once per focus, then load the charts by period id.
   useFocusEffect(
     useCallback(() => {
       refresh();
+    }, [refresh]),
+  );
+
+  const periodId = period?.id ?? null;
+  useFocusEffect(
+    useCallback(() => {
       (async () => {
-        if (!period) {
+        if (!periodId) {
           setTrend([]);
           setNeedCats([]);
           setWantCats([]);
@@ -78,9 +87,9 @@ export default function DashboardScreen() {
           const end = todayISO();
           const start = addDays(end, -13);
           const [rows, needRows, wantRows, monthBuckets, monthSaved] = await Promise.all([
-            dailyTotalsForPeriod(period.id),
-            sumByCategory(period.id, 'need'),
-            sumByCategory(period.id, 'want'),
+            dailyTotalsForPeriod(periodId),
+            sumByCategory(periodId, 'need'),
+            sumByCategory(periodId, 'want'),
             sumByBucketForMonth(ym),
             sumContributionsForMonth(ym),
           ]);
@@ -93,7 +102,7 @@ export default function DashboardScreen() {
           console.error('[dashboard] data load failed:', err);
         }
       })();
-    }, [refresh, period, ym]),
+    }, [periodId, ym]),
   );
 
   if (!period || !derived) {

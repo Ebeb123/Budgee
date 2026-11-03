@@ -61,7 +61,7 @@ export default function SplitEditor({ incomeCents, value, onChange }) {
               keyboardType="number-pad"
               maxLength={3}
               selectTextOnFocus
-              style={[theme.typography.title, { color: theme.colors.text, textAlign: 'right', minWidth: 34, padding: 0 }]}
+              style={[theme.typography.title, styles.pctInput, { color: theme.colors.text }]}
             />
             <Text style={[theme.typography.title, { color: theme.colors.textMuted }]}>%</Text>
           </View>
@@ -84,5 +84,7 @@ export default function SplitEditor({ incomeCents, value, onChange }) {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   dot: { width: 12, height: 12, borderRadius: 6, marginRight: 10 },
-  pctBox: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6 },
+  pctBox: { flexDirection: 'row', alignItems: 'center', flexShrink: 0, paddingHorizontal: 10, paddingVertical: 6 },
+  // fixed width: on web a TextInput is an <input>, which is ~20 characters wide by default and pushes the row off-screen
+  pctInput: { width: 40, textAlign: 'right', padding: 0 },
 });

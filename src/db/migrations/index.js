@@ -175,4 +175,94 @@ export const MIGRATIONS = [
       }
     },
   },
+
+  {
+    // -----------------------------------------------------------------------
+    // v4: recurring expenses + quick-add favourites
+    // -----------------------------------------------------------------------
+    // recurring_expenses: rent, bills, subscriptions. Each row knows when it is
+    //   next due; on refresh the app logs every due one as a normal expense and
+    //   moves next_due forward (see services/recurringService.js).
+    // quick_adds: one-tap favourites on the Log screen ("Lunch ₱85").
+    // expenses.recurring_id: marks expenses that were logged automatically, so
+    //   History can show a small "repeat" icon next to them.
+    // -----------------------------------------------------------------------
+    version: 4,
+    name: 'recurring expenses + quick adds',
+    async run(db) {
+      await db.execAsync(`
+        CREATE TABLE recurring_expenses (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          category_id  INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+          bucket       TEXT    NOT NULL CHECK (bucket IN ('need','want')),
+          amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+          note         TEXT,
+          frequency    TEXT    NOT NULL CHECK (frequency IN ('weekly','monthly')),
+          day          INTEGER NOT NULL,               -- weekly: 0-6 (Sun-Sat); monthly: 1-31
+          next_due     TEXT    NOT NULL,               -- 'YYYY-MM-DD'
+          is_active    INTEGER NOT NULL DEFAULT 1,     -- 0 = paused
+          created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE quick_adds (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          category_id  INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+          bucket       TEXT    NOT NULL CHECK (bucket IN ('need','want')),
+          amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+          note         TEXT,
+          sort_order   INTEGER NOT NULL DEFAULT 0,
+          created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+
+        ALTER TABLE expenses ADD COLUMN recurring_id INTEGER;
+      `);
+    },
+  },
+
+  {
+    // -----------------------------------------------------------------------
+    // v5: bills + billers (due-date reminders)
+    // -----------------------------------------------------------------------
+    // billers: who you pay (VECO, PLDT, MCWD come built in; you can add more).
+    //   logo_key -> one of the logos bundled in assets/billers (built-ins)
+    //   logo_uri -> a picture you picked yourself, stored as a data: URI
+    //   Neither -> the app draws a coloured initial instead.
+    // bills: one account with a biller. Bills repeat monthly on due_day; due_date
+    //   is the NEXT unpaid due date and moves forward a month when you mark it
+    //   paid. amount_cents is optional because bill amounts change every month.
+    // -----------------------------------------------------------------------
+    version: 5,
+    name: 'bills + billers',
+    async run(db) {
+      await db.execAsync(`
+        CREATE TABLE billers (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          name       TEXT    NOT NULL,
+          color      TEXT    NOT NULL,
+          logo_key   TEXT,
+          logo_uri   TEXT,
+          is_default INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE bills (
+          id             INTEGER PRIMARY KEY AUTOINCREMENT,
+          biller_id      INTEGER NOT NULL REFERENCES billers(id) ON DELETE CASCADE,
+          nickname       TEXT,                         -- e.g. "Home", "Boarding house"
+          account_number TEXT,
+          amount_cents   INTEGER,                      -- optional
+          due_day        INTEGER NOT NULL,             -- 1-31
+          due_date       TEXT    NOT NULL,             -- next unpaid due date 'YYYY-MM-DD'
+          last_paid_at   TEXT,
+          created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX idx_bills_due ON bills(due_date);
+
+        INSERT INTO billers (name, color, logo_key, is_default) VALUES
+          ('VECO',  '#1E3A8A', 'veco', 1),
+          ('PLDT',  '#D7182A', 'pldt', 1),
+          ('MCWD',  '#1D7FD8', 'mcwd', 1);
+      `);
+    },
+  },
 ];

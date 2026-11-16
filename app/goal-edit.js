@@ -18,6 +18,7 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Screen from '@/components/Screen';
 import TextField from '@/components/TextField';
+import * as haptics from '@/lib/haptics';
 import DeadlinePicker from '@/features/goals/DeadlinePicker';
 import { toCents } from '@/services/money';
 import {
@@ -82,6 +83,7 @@ export default function GoalEdit() {
           isActive: makeActive,
         });
       }
+      haptics.success();
       await refresh();
       router.back();
     } catch (err) {
@@ -154,7 +156,8 @@ export default function GoalEdit() {
       {isEdit ? (
         <Button
           title="Delete goal"
-          variant="secondary"
+          icon="trash-outline"
+          variant="danger"
           onPress={confirmDelete}
           disabled={saving}
           style={{ marginTop: theme.spacing.md }}

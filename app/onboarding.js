@@ -8,13 +8,20 @@
 // It creates the goal (if you entered one) and then opens your ongoing account
 // with the starting balance. Savings is NOT auto-moved into the goal here - you
 // choose when to move savings into a goal from the Savings/Goals screen.
+//
+// In the BROWSER (the portfolio demo) setup is skipped: the app opens filled
+// with made-up sample data. Phones always get the real setup.
 // ---------------------------------------------------------------------------
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, Text, View } from 'react-native';
 import { Alert } from '@/lib/alert';
 import { useRouter } from 'expo-router';
 
+import Button from '@/components/Button';
 import Screen from '@/components/Screen';
+import { loadSampleData } from '@/features/onboarding/sampleData';
+import { useTheme } from '@/theme/ThemeProvider';
 import StepBalance from '@/features/onboarding/StepBalance';
 import StepSplit from '@/features/onboarding/StepSplit';
 import StepGoal from '@/features/onboarding/StepGoal';
@@ -27,10 +34,11 @@ import { useBudget } from '@/state/BudgetProvider';
 
 export default function Onboarding() {
   const router = useRouter();
+  const { theme } = useTheme();
   const { refresh } = useBudget();
 
   const [step, setStep] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(Platform.OS === 'web');
   const [data, setData] = useState({
     periodType: 'weekly',
     incomeText: '',
@@ -83,6 +91,37 @@ export default function Onboarding() {
       Alert.alert('Something went wrong', 'Could not save your setup. Please try again.');
       setSubmitting(false);
     }
+  }
+
+  // The browser build is a portfolio demo: skip setup and open with sample data.
+  useEffect(() => {
+    if (Platform.OS === 'web') trySample();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function trySample() {
+    setSubmitting(true);
+    try {
+      await loadSampleData();
+      await refresh();
+      router.replace('/(tabs)');
+    } catch (err) {
+      console.error('[onboarding] sample data failed:', err);
+      Alert.alert('Something went wrong', 'Could not load the sample data. Please try again.');
+      setSubmitting(false);
+    }
+  }
+
+  if (Platform.OS === 'web') {
+    return (
+      <Screen>
+        <View style={{ alignItems: 'center', gap: theme.spacing.md, marginTop: theme.spacing.xl }}>
+          <ActivityIndicator color={theme.colors.accent} size="large" />
+          <Text style={[theme.typography.body, { color: theme.colors.textMuted }]}>Loading the demo…</Text>
+          {!submitting ? <Button title="Try again" variant="secondary" onPress={trySample} /> : null}
+        </View>
+      </Screen>
+    );
   }
 
   return (

@@ -4,24 +4,30 @@
 // Startup + global providers + navigation shell + the onboarding gate.
 //
 // Order of wrapping matters:
-//   DB init  ->  ThemeProvider  ->  BudgetProvider  ->  navigation
+//   DB init -> ThemeProvider -> GlassProvider -> BudgetProvider -> navigation
 // The database must be ready before the providers read from it; the theme wraps
 // everything visual; the budget state is read by the gate to decide whether to
 // send a first-run user into onboarding.
 // ---------------------------------------------------------------------------
 
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Stack, useRouter, useSegments } from 'expo-router';
 
+import { DialogProvider } from '@/components/Dialog';
+import { GlassProvider } from '@/components/GlassProvider';
+import { ToastProvider } from '@/components/Toast';
+import WebFrame from '@/components/WebFrame';
 import { initDatabase } from '@/db/database';
+import { syncBillReminders } from '@/services/billReminders';
 import { darkColors } from '@/theme/palettes';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { BudgetProvider, useBudget } from '@/state/BudgetProvider';
-import { seedDemoIfEmpty } from '@/demo/seedDemo';
-import DemoShell from '@/demo/DemoShell';
+
+// Sheets: the screen underneath stays visible (blurred) behind a glass panel.
+const SHEET = { presentation: 'transparentModal', animation: 'fade', contentStyle: { backgroundColor: 'transparent' } };
 
 export default function RootLayout() {
   const [status, setStatus] = useState('loading');
@@ -32,8 +38,6 @@ export default function RootLayout() {
     (async () => {
       try {
         await initDatabase();
-        // Web demo only: start visitors with sample data instead of an empty app.
-        if (Platform.OS === 'web') await seedDemoIfEmpty();
         if (!cancelled) setStatus('ready');
       } catch (err) {
         console.error('[startup] database init failed:', err);
@@ -54,11 +58,17 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <BudgetProvider>
-          <DemoShell>
-            <RootNavigator />
-          </DemoShell>
-        </BudgetProvider>
+        <GlassProvider>
+          <BudgetProvider>
+            <WebFrame>
+              <DialogProvider>
+                <ToastProvider>
+                  <RootNavigator />
+                </ToastProvider>
+              </DialogProvider>
+            </WebFrame>
+          </BudgetProvider>
+        </GlassProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );
@@ -68,6 +78,12 @@ export default function RootLayout() {
 function RootNavigator() {
   const { theme } = useTheme();
   const { loading } = useBudget();
+
+  // Re-schedule bill reminders from the database on every app start, so they
+  // stay right even if the phone dropped them (e.g. after a restart).
+  useEffect(() => {
+    syncBillReminders();
+  }, []);
 
   // Don't render navigation until we know whether a budget exists - this avoids
   // a flash of the dashboard before redirecting a first-run user to onboarding.
@@ -84,8 +100,8 @@ function RootNavigator() {
       >
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="onboarding" />
-        <Stack.Screen name="budget-edit" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="allocate" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="budget-edit" options={SHEET} />
+        <Stack.Screen name="allocate" options={SHEET} />
       </Stack>
       <OnboardingGate />
     </>

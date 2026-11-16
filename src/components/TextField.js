@@ -46,6 +46,8 @@ export default function TextField({
         style={{
           backgroundColor: theme.colors.surfaceAlt,
           borderRadius: theme.radius.md,
+          borderWidth: 1,
+          borderColor: theme.colors.border,
           paddingHorizontal: theme.spacing.md,
           paddingVertical: 14,
           color: theme.colors.text,

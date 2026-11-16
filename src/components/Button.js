@@ -1,12 +1,18 @@
 // ---------------------------------------------------------------------------
 // Button - the app's standard tappable button.
 // ---------------------------------------------------------------------------
-// One button component with two looks: 'primary' (filled accent) and
-// 'secondary' (muted surface). Centralizing it keeps every button the same
-// shape/size and makes disabled + pressed feedback consistent.
+// Three looks:
+//   - 'primary'   solid lime with a soft glow. Kept SOLID on purpose: a glass
+//                 primary button would be hard to read and lose the clear
+//                 "tap here" signal.
+//   - 'secondary' glass, matching the cards.
+//   - 'danger'    glass with red text, for delete actions.
+// Centralizing it keeps every button the same shape/size and makes disabled +
+// pressed feedback consistent.
 // ---------------------------------------------------------------------------
 
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -14,15 +20,16 @@ import { useTheme } from '@/theme/ThemeProvider';
  * @param {object} props
  * @param {string} props.title
  * @param {() => void} props.onPress
- * @param {'primary'|'secondary'} [props.variant='primary']
+ * @param {'primary'|'secondary'|'danger'} [props.variant='primary']
+ * @param {string} [props.icon]      Optional Ionicons name shown before the title
  * @param {boolean} [props.disabled]
  * @param {object} [props.style]
  */
-export default function Button({ title, onPress, variant = 'primary', disabled = false, style }) {
+export default function Button({ title, onPress, variant = 'primary', icon, disabled = false, style }) {
   const { theme } = useTheme();
+  const c = theme.colors;
   const isPrimary = variant === 'primary';
-  const bg = isPrimary ? theme.colors.accent : theme.colors.surfaceAlt;
-  const fg = isPrimary ? theme.colors.onAccent : theme.colors.text;
+  const fg = isPrimary ? c.onAccent : variant === 'danger' ? c.alert : c.text;
 
   return (
     <Pressable
@@ -30,18 +37,32 @@ export default function Button({ title, onPress, variant = 'primary', disabled =
       disabled={disabled}
       style={({ pressed }) => [
         {
-          backgroundColor: bg,
           borderRadius: theme.radius.pill,
           paddingVertical: 14,
           paddingHorizontal: theme.spacing.lg,
           alignItems: 'center',
           justifyContent: 'center',
-          opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
+          opacity: disabled ? 0.4 : pressed ? 0.82 : 1,
+          transform: [{ scale: pressed && !disabled ? 0.98 : 1 }],
         },
+        isPrimary
+          ? {
+              backgroundColor: c.accent,
+              boxShadow: disabled ? undefined : `0 6px 20px ${c.accent}${theme.scheme === 'dark' ? '40' : '33'}`,
+            }
+          : {
+              backgroundColor: c.surfaceAlt,
+              borderWidth: 1,
+              borderColor: c.glassBorder,
+              borderTopColor: c.glassHighlight,
+            },
         style,
       ]}
     >
-      <Text style={[theme.typography.title, { color: fg }]}>{title}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {icon ? <Ionicons name={icon} size={18} color={fg} /> : null}
+        <Text style={[theme.typography.title, { color: fg }]}>{title}</Text>
+      </View>
     </Pressable>
   );
 }

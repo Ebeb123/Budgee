@@ -14,6 +14,7 @@
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import * as haptics from '@/lib/haptics';
 import { useTheme } from '@/theme/ThemeProvider';
 
 /**
@@ -48,7 +49,10 @@ export default function CategoryPicker({ categories, selectedId, onSelect }) {
                 return (
                   <Pressable
                     key={c.id}
-                    onPress={() => onSelect(c)}
+                    onPress={() => {
+                      if (!selected) haptics.select();
+                      onSelect(c);
+                    }}
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',

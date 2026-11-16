@@ -78,7 +78,7 @@ export function monthsElapsed(startISO, todayISO) {
   return Math.max(1, days / 30.436875);
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -126,4 +126,33 @@ export function formatDayHeading(iso) {
   if (iso === today) return 'Today';
   if (iso === addDays(today, -1)) return 'Yesterday';
   return formatDisplayDate(iso);
+}
+
+// --- Weekday / month-length helpers (for recurring expenses) ---------------
+
+export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+export const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Day of the week for an ISO day, 0 = Sunday ... 6 = Saturday. */
+export function dayOfWeek(iso) {
+  return fromISO(iso).getDay();
+}
+
+/** Number of days in a month (month is 1-12). */
+export function daysInMonth(year, month) {
+  return new Date(year, month, 0).getDate();
+}
+
+/** The given day of a 'YYYY-MM' month, clamped to the month's length (31 -> 30 in April). */
+export function dayInMonth(ym, day) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = Math.min(day, daysInMonth(y, m));
+  return `${ym}-${String(d).padStart(2, '0')}`;
+}
+
+/** 1 -> '1st', 2 -> '2nd', 11 -> '11th', 23 -> '23rd'. */
+export function ordinal(n) {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  return `${n}${{ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th'}`;
 }

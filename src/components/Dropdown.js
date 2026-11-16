@@ -1,10 +1,13 @@
 // ---------------------------------------------------------------------------
-// Dropdown - a small pill that opens a menu of options.
+// Dropdown - a small glass pill that opens a menu of options.
 // ---------------------------------------------------------------------------
 // React Native has no built-in dropdown, so this is a tiny reusable one: a
 // pressable pill (current label + chevron) that opens a Modal with the options.
 // Using a Modal (instead of an absolutely-positioned View) means the menu always
 // floats above everything and closes cleanly when you tap outside it.
+//
+// The screen behind the menu is blurred (real blur on iOS / web; a tinted
+// glass layer on Android, which can't blur across a Modal window).
 //
 // It's "controlled": the parent owns the selected `value` and updates it in
 // `onChange`. That keeps this component dumb and reusable.
@@ -14,6 +17,8 @@ import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { GlassBlur } from '@/components/GlassProvider';
+import * as haptics from '@/lib/haptics';
 import { useTheme } from '@/theme/ThemeProvider';
 
 /**
@@ -24,6 +29,7 @@ import { useTheme } from '@/theme/ThemeProvider';
  */
 export default function Dropdown({ value, options, onChange }) {
   const { theme } = useTheme();
+  const c = theme.colors;
   const [open, setOpen] = useState(false);
 
   const current = options.find((o) => o.value === value) ?? options[0];
@@ -32,37 +38,39 @@ export default function Dropdown({ value, options, onChange }) {
     <>
       <Pressable
         onPress={() => setOpen(true)}
-        style={[
-          styles.pill,
-          { backgroundColor: theme.colors.surfaceAlt, borderColor: theme.colors.border },
-        ]}
+        style={[styles.pill, { backgroundColor: c.surfaceAlt, borderColor: c.glassBorder }]}
       >
-        <Text style={[theme.typography.label, { color: theme.colors.text }]}>{current?.label}</Text>
-        <Ionicons name="chevron-down" size={14} color={theme.colors.textMuted} />
+        <Text style={[theme.typography.label, { color: c.text }]}>{current?.label}</Text>
+        <Ionicons name="chevron-down" size={14} color={c.textMuted} />
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <GlassBlur intensity={25} inModal style={StyleSheet.absoluteFill} />
         {/* Tapping the dimmed backdrop closes the menu. */}
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <View style={[styles.menu, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+        <Pressable style={[styles.backdrop, { backgroundColor: c.backdrop }]} onPress={() => setOpen(false)}>
+          <View
+            style={[
+              styles.menu,
+              { backgroundColor: c.glassStrong, borderColor: c.glassBorder, borderTopColor: c.glassHighlight },
+            ]}
+          >
             {options.map((o) => {
               const active = o.value === value;
               return (
                 <Pressable
                   key={o.value}
                   onPress={() => {
+                    if (!active) haptics.select();
                     onChange(o.value);
                     setOpen(false);
                   }}
                   style={({ pressed }) => [
                     styles.item,
-                    { backgroundColor: active ? theme.colors.surfaceAlt : 'transparent', opacity: pressed ? 0.7 : 1 },
+                    { backgroundColor: active ? c.surfaceAlt : 'transparent', opacity: pressed ? 0.7 : 1 },
                   ]}
                 >
-                  <Text style={[theme.typography.body, { color: active ? theme.colors.accent : theme.colors.text }]}>
-                    {o.label}
-                  </Text>
-                  {active ? <Ionicons name="checkmark" size={16} color={theme.colors.accent} /> : null}
+                  <Text style={[theme.typography.body, { color: active ? c.accent : c.text }]}>{o.label}</Text>
+                  {active ? <Ionicons name="checkmark" size={16} color={c.accent} /> : null}
                 </Pressable>
               );
             })}
@@ -85,14 +93,13 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
   },
   menu: {
-    minWidth: 200,
-    borderRadius: 14,
+    minWidth: 220,
+    borderRadius: 20,
     borderWidth: 1,
     paddingVertical: 6,
     overflow: 'hidden',
@@ -103,5 +110,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 16,
+    marginHorizontal: 6,
+    borderRadius: 12,
   },
 });

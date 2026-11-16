@@ -46,6 +46,7 @@
  * @property {string} spent_at          'YYYY-MM-DD'
  * @property {string} created_at
  * @property {string|null} deleted_at
+ * @property {number|null} [recurring_id]  set when logged automatically by a recurring expense
  * @property {string} [category_name]   present when joined with categories
  * @property {string} [category_icon]
  */

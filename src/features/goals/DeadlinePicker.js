@@ -43,6 +43,8 @@ export default function DeadlinePicker({ value, onChange }) {
               paddingHorizontal: 14,
               borderRadius: theme.radius.pill,
               backgroundColor: theme.colors.surfaceAlt,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
             }}
           >
             <Text style={[theme.typography.label, { color: theme.colors.text }]}>{p.label}</Text>

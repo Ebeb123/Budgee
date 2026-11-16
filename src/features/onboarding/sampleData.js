@@ -1,10 +1,13 @@
 // ---------------------------------------------------------------------------
-// DEMO DATA  (web demo only)
+// SAMPLE DATA  (browser only, opt-in)
 // ---------------------------------------------------------------------------
-// Fills an empty database with two months of made-up student spending so
-// portfolio visitors see a working dashboard straight away instead of an
-// empty app. It uses the app's own repositories/services, so the data is
-// exactly what a real user would create. Nothing here is a real person's data.
+// Nothing loads this automatically. The first onboarding screen in the browser
+// build shows a "Try with sample data" button, so portfolio visitors can see a
+// working dashboard in one tap, while real use starts clean.
+//
+// It fills an empty database with two months of made-up student spending,
+// using the app's own repositories/services, so the data is exactly what a
+// real user would create. Nothing here is a real person's data.
 // ---------------------------------------------------------------------------
 
 import { getActivePeriod } from '@/repositories/budgetRepo';
@@ -12,8 +15,12 @@ import { listCategories } from '@/repositories/categoryRepo';
 import { addExpense } from '@/repositories/expenseRepo';
 import { addContribution, createGoal } from '@/repositories/goalRepo';
 import { addIncomeEvent } from '@/repositories/incomeRepo';
+import { createBill, listBillers } from '@/repositories/billRepo';
+import { createQuickAdd } from '@/repositories/quickAddRepo';
+import { createRecurring } from '@/repositories/recurringRepo';
 import { setSetting } from '@/repositories/settingsRepo';
 import { openAccount } from '@/services/periodService';
+import { firstDueDate } from '@/services/recurring';
 import { addDays, addMonths, todayISO } from '@/utils/date';
 
 // [category name, note, min ₱, max ₱, how often]
@@ -46,8 +53,8 @@ function rng(seed) {
   };
 }
 
-/** Seeds sample data only when no account exists yet. Returns true if it seeded. */
-export async function seedDemoIfEmpty() {
+/** Loads sample data only when no account exists yet. Returns true if it loaded. */
+export async function loadSampleData() {
   if (await getActivePeriod()) return false;
 
   const R = rng(2026);
@@ -100,6 +107,54 @@ export async function seedDemoIfEmpty() {
       note: r.note,
       spentAt: r.day > today ? today : r.day,
     });
+  }
+
+  // A few one-tap favourites for the Log screen.
+  const quick = [
+    ['Food', 'Canteen lunch', 85_00],
+    ['Transport', 'Jeepney fare', 13_00],
+    ['Dining Out', 'Milk tea', 120_00],
+  ];
+  for (const [catName, note, cents] of quick) {
+    const cat = byName[catName];
+    if (cat) await createQuickAdd({ categoryId: cat.id, bucket: cat.bucket, amountCents: cents, note });
+  }
+
+  // Two recurring expenses, first due AFTER today so nothing doubles up with
+  // the sample history above.
+  const tomorrow = addDays(today, 1);
+  const recurring = [
+    ['Subscriptions', 'Music streaming', 149_00, 'monthly', 5],
+    ['Bills', 'Mobile load', 199_00, 'monthly', 20],
+  ];
+  for (const [catName, note, cents, frequency, day] of recurring) {
+    const cat = byName[catName];
+    if (!cat) continue;
+    await createRecurring({
+      categoryId: cat.id,
+      bucket: cat.bucket,
+      amountCents: cents,
+      note,
+      frequency,
+      day,
+      nextDue: firstDueDate(frequency, day, tomorrow),
+    });
+  }
+
+  // Bills: one due in a few days (shows on the dashboard), the others later.
+  // Account numbers are made up.
+  const billers = Object.fromEntries((await listBillers()).map((b) => [b.name, b]));
+  const sampleBills = [
+    ['VECO', 'Home', '0000-1234-5678', 1850_00, 3],
+    ['PLDT', 'Fibr', '0298765432', 1699_00, 12],
+    ['MCWD', null, '12-345-678', 420_00, 20],
+  ];
+  for (const [billerName, nickname, accountNumber, amountCents, inDays] of sampleBills) {
+    const biller = billers[billerName];
+    if (!biller) continue;
+    const dueDate = addDays(today, inDays);
+    const dueDay = Number(dueDate.slice(8, 10));
+    await createBill({ billerId: biller.id, nickname, accountNumber, amountCents, dueDay, dueDate });
   }
 
   await setSetting('onboarded', '1');

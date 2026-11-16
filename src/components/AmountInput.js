@@ -45,6 +45,8 @@ export default function AmountInput({
         alignItems: 'center',
         backgroundColor: theme.colors.surfaceAlt,
         borderRadius: theme.radius.md,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
         paddingHorizontal: theme.spacing.md,
       }}
     >

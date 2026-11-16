@@ -78,7 +78,7 @@ export default function BreakdownRing({
     <View style={{ alignItems: 'center', gap: theme.spacing.md, alignSelf: 'stretch' }}>
       <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
         <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-          <G rotation="-90" origin={`${center}, ${center}`}>
+          <G transform={`rotate(-90 ${center} ${center})`}>
             <Circle cx={center} cy={center} r={radius} stroke={theme.colors.surfaceAlt} strokeWidth={strokeWidth} fill="none" />
             {arcs.map((a) =>
               a.dash > 0 ? (

@@ -7,7 +7,7 @@ export function prepareDatabase() {
   return Promise.resolve();
 }
 
-/** The demo reset button only exists on the web build. */
+/** "Erase data in this browser" only exists on the web build. */
 export function resetDatabase() {}
 
 export function saveDatabaseNow() {}

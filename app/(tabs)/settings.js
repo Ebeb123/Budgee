@@ -1,12 +1,14 @@
 // ---------------------------------------------------------------------------
 // SETTINGS  (app/(tabs)/settings.js)
 // ---------------------------------------------------------------------------
-// Budget (with Edit), the daily Reminder (Step 7 - hidden in Expo Go where it
-// can't run), and the Appearance toggle.
+// Budget (with Edit), Manage (bills, categories, recurring expenses), the daily
+// Reminder (phones only), Appearance (theme + hide
+// amounts) and - in the browser only - erasing this browser's data.
 // ---------------------------------------------------------------------------
 
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Alert } from '@/lib/alert';
 import { useRouter } from 'expo-router';
 
@@ -14,6 +16,9 @@ import Button from '@/components/Button';
 import Card from '@/components/Card';
 import Screen from '@/components/Screen';
 import Segmented from '@/components/Segmented';
+import { DB_NAME } from '@/db/database';
+import { resetDatabase } from '@/db/sqlite';
+import * as haptics from '@/lib/haptics';
 import { formatCents } from '@/services/money';
 import {
   ensurePermission,
@@ -49,7 +54,8 @@ async function reminderMessage() {
 }
 
 export default function SettingsScreen() {
-  const { theme, mode, setMode } = useTheme();
+  const { theme, mode, setMode, hideAmounts, setHideAmounts } = useTheme();
+  const c = theme.colors;
   const { period } = useBudget();
   const router = useRouter();
 
@@ -86,6 +92,24 @@ export default function SettingsScreen() {
     if (remindOn) {
       await scheduleDailyReminder({ hour: h, minute: 0, message: await reminderMessage() });
     }
+  }
+
+  function eraseBrowserData() {
+    Alert.alert(
+      'Reset the demo?',
+      'Any changes you made are thrown away and the sample data is loaded fresh.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: () => {
+            resetDatabase(DB_NAME);
+            window.location.reload();
+          },
+        },
+      ],
+    );
   }
 
   async function testNow() {
@@ -128,6 +152,20 @@ export default function SettingsScreen() {
         )}
       </Card>
 
+      {/* --- Manage --- */}
+      <Card style={{ marginBottom: theme.spacing.md, paddingVertical: theme.spacing.sm }}>
+        <Text style={[theme.typography.label, { color: c.textMuted, marginTop: theme.spacing.xs, marginBottom: 4 }]}>
+          MANAGE
+        </Text>
+        <NavRow icon="pricetags-outline" label="Categories" hint="Add, rename, recolour or hide" onPress={() => router.push('/categories')} />
+        <View style={[styles.divider, { backgroundColor: c.border }]} />
+        <NavRow icon="receipt-outline" label="Bills" hint="Due dates, account numbers, reminders" onPress={() => router.push('/bills')} />
+        <View style={[styles.divider, { backgroundColor: c.border }]} />
+        <NavRow icon="repeat" label="Recurring expenses" hint="Rent, bills, subscriptions" onPress={() => router.push('/recurring')} />
+        <View style={[styles.divider, { backgroundColor: c.border }]} />
+        <NavRow icon="time-outline" label="History" hint="Search and filter every expense" onPress={() => router.push('/history')} />
+      </Card>
+
       {/* --- Daily reminder --- */}
       <Card style={{ marginBottom: theme.spacing.md, gap: theme.spacing.sm }}>
         <View style={styles.rowBetween}>
@@ -136,8 +174,8 @@ export default function SettingsScreen() {
             <Switch
               value={remindOn}
               onValueChange={toggleReminder}
-              trackColor={{ true: theme.colors.accent, false: theme.colors.surfaceAlt }}
-              thumbColor={theme.colors.surface}
+              trackColor={{ true: c.accent, false: c.border }}
+              thumbColor={theme.scheme === 'dark' ? '#FFFFFF' : c.surface}
             />
           ) : null}
         </View>
@@ -164,46 +202,69 @@ export default function SettingsScreen() {
           </>
         ) : (
           <Text style={[theme.typography.caption, { color: theme.colors.textMuted }]}>
-            {Platform.OS === 'web'
-              ? 'Daily reminders are a phone feature, so they are turned off in this web demo. Everything else works normally.'
-              : "Reminders need a development build — they don't run inside Expo Go. Everything else in the app works normally."}
+            Daily reminders are a phone feature, so they are off in the browser. Everything else works normally.
           </Text>
         )}
       </Card>
 
       {/* --- Appearance --- */}
-      <Card>
-        <Text style={[theme.typography.label, { color: theme.colors.textMuted, marginBottom: theme.spacing.sm }]}>
-          APPEARANCE
-        </Text>
-        <View style={[styles.segment, { backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius.pill }]}>
-          {MODES.map((m) => {
-            const selected = mode === m.key;
-            return (
-              <Pressable
-                key={m.key}
-                onPress={() => setMode(m.key)}
-                style={[
-                  styles.segmentItem,
-                  { backgroundColor: selected ? theme.colors.accent : 'transparent', borderRadius: theme.radius.pill },
-                ]}
-              >
-                <Text
-                  style={[theme.typography.label, { color: selected ? theme.colors.onAccent : theme.colors.textMuted }]}
-                >
-                  {m.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+      <Card style={{ gap: theme.spacing.md, marginBottom: Platform.OS === 'web' ? theme.spacing.md : 0 }}>
+        <Text style={[theme.typography.label, { color: c.textMuted }]}>APPEARANCE</Text>
+        <Segmented options={MODES} value={mode} onChange={setMode} />
+        <View style={styles.rowBetween}>
+          <View style={{ flex: 1, paddingRight: theme.spacing.md }}>
+            <Text style={[theme.typography.body, { color: c.text }]}>Hide amounts</Text>
+            <Text style={[theme.typography.caption, { color: c.textMuted }]}>
+              Shows ₱•••• instead of numbers. Also on the dashboard's eye button.
+            </Text>
+          </View>
+          <Switch
+            value={hideAmounts}
+            onValueChange={(v) => {
+              haptics.select();
+              setHideAmounts(v);
+            }}
+            trackColor={{ true: c.accent, false: c.border }}
+            thumbColor={theme.scheme === 'dark' ? '#FFFFFF' : c.surface}
+          />
         </View>
       </Card>
+
+      {/* --- Browser only: start over --- */}
+      {Platform.OS === 'web' ? (
+        <Card style={{ gap: theme.spacing.sm }}>
+          <Text style={[theme.typography.label, { color: c.textMuted }]}>DEMO</Text>
+          <Text style={[theme.typography.caption, { color: c.textMuted }]}>
+            This is a demo with made-up data. Changes stay only in this browser.
+          </Text>
+          <Button title="Reset demo" variant="danger" icon="refresh-outline" onPress={eraseBrowserData} />
+        </Card>
+      ) : null}
     </Screen>
   );
 }
 
+/** A tappable row that opens another screen. */
+function NavRow({ icon, label, hint, onPress }) {
+  const { theme } = useTheme();
+  const c = theme.colors;
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.navRow, { opacity: pressed ? 0.6 : 1 }]}>
+      <View style={[styles.navIcon, { backgroundColor: c.surfaceAlt, borderColor: c.glassBorder }]}>
+        <Ionicons name={icon} size={18} color={c.accent} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[theme.typography.body, { color: c.text }]}>{label}</Text>
+        <Text style={[theme.typography.caption, { color: c.textMuted }]}>{hint}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={c.textMuted} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  segment: { flexDirection: 'row', padding: 4 },
-  segmentItem: { flex: 1, alignItems: 'center', paddingVertical: 10 },
+  navRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  navIcon: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  divider: { height: StyleSheet.hairlineWidth, marginLeft: 48 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 });

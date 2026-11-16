@@ -15,7 +15,7 @@
 // line shows your last 14 days.
 // ---------------------------------------------------------------------------
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 
@@ -25,17 +25,26 @@ import Dropdown from '@/components/Dropdown';
 import Screen from '@/components/Screen';
 import ProgressBar from '@/components/ProgressBar';
 import BalanceCard from '@/features/dashboard/BalanceCard';
+import BillsDueCard from '@/features/dashboard/BillsDueCard';
 import BreakdownRing from '@/features/dashboard/BreakdownRing';
 import BucketCard from '@/features/dashboard/BucketCard';
-import MonthlyPie from '@/features/dashboard/MonthlyPie';
+import InsightsCard from '@/features/dashboard/InsightsCard';
+import TopCategories from '@/features/dashboard/TopCategories';
 import SavingsCard from '@/features/dashboard/SavingsCard';
 import TrendChart from '@/features/dashboard/TrendChart';
 import { formatCents } from '@/services/money';
 import { estimateTimeToGoal } from '@/services/savings';
 import { buildDailySeries } from '@/services/history';
-import { addDays, currentYM, monthLabel, shiftYM, todayISO, ymOf } from '@/utils/date';
-import { dailyTotalsForPeriod, sumByCategory, sumByBucketForMonth } from '@/repositories/expenseRepo';
-import { sumContributionsForMonth } from '@/repositories/goalRepo';
+import { buildInsights } from '@/services/insights';
+import { addDays, currentYM, dayInMonth, monthLabel, shiftYM, todayISO, ymOf } from '@/utils/date';
+import {
+  biggestExpenseBetween,
+  dailyTotalsForPeriod,
+  sumByBucketForMonth,
+  sumByCategory,
+  sumByCategoryBetween,
+  sumByCategoryForMonth,
+} from '@/repositories/expenseRepo';
 import { useBudget } from '@/state/BudgetProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -46,9 +55,10 @@ const VIEW_OPTIONS = [
 ];
 
 export default function DashboardScreen() {
-  const { theme } = useTheme();
+  const { theme, hideAmounts, setHideAmounts } = useTheme();
   const router = useRouter();
-  const { period, derived, todaySpentCents, activeGoal, activeGoalSavedCents, refresh } = useBudget();
+  const { period, derived, todaySpentCents, activeGoal, activeGoalSavedCents, refresh, version } = useBudget();
+  const periodId = period?.id ?? null;
 
   const [trend, setTrend] = useState([]);
   const [needCats, setNeedCats] = useState([]);
@@ -59,42 +69,64 @@ export default function DashboardScreen() {
   // when the calendar rolls into a new month the pie starts there automatically.
   // The ‹ › arrows step to other months.
   const [ym, setYm] = useState(currentYM());
-  const [monthData, setMonthData] = useState({ need: 0, want: 0, savings: 0 });
+  const [monthCats, setMonthCats] = useState([]);
+  const [insights, setInsights] = useState([]);
 
-  // Keep the dashboard fresh when returning to it (and when the month changes):
-  // rebuild the 14-day trend, the per-category ring data, and the month pie.
+  // 1) Re-read the shared numbers every time the dashboard comes into focus.
+  //    (Kept separate from step 2 on purpose: if this effect also depended on
+  //    `period`, each refresh would hand back a new period object, re-run the
+  //    effect, refresh again... forever.)
   useFocusEffect(
     useCallback(() => {
       refresh();
-      (async () => {
-        if (!period) {
-          setTrend([]);
-          setNeedCats([]);
-          setWantCats([]);
-          setMonthData({ need: 0, want: 0, savings: 0 });
-          return;
-        }
-        try {
-          const end = todayISO();
-          const start = addDays(end, -13);
-          const [rows, needRows, wantRows, monthBuckets, monthSaved] = await Promise.all([
-            dailyTotalsForPeriod(period.id),
-            sumByCategory(period.id, 'need'),
-            sumByCategory(period.id, 'want'),
-            sumByBucketForMonth(ym),
-            sumContributionsForMonth(ym),
-          ]);
-          const totalsByDay = Object.fromEntries(rows.map((r) => [r.day, r.total]));
-          setTrend(buildDailySeries(start, end, totalsByDay));
-          setNeedCats(needRows);
-          setWantCats(wantRows);
-          setMonthData({ need: monthBuckets.need, want: monthBuckets.want, savings: monthSaved });
-        } catch (err) {
-          console.error('[dashboard] data load failed:', err);
-        }
-      })();
-    }, [refresh, period, ym]),
+    }, [refresh]),
   );
+
+  // 2) Rebuild the 14-day trend, the per-category ring data, the month pie and
+  //    the insights whenever the shared numbers change (`version` ticks on every
+  //    refresh) or you step to another month.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!periodId) {
+        setTrend([]);
+        setNeedCats([]);
+        setWantCats([]);
+        setMonthCats([]);
+        setInsights([]);
+        return;
+      }
+      try {
+        const end = todayISO();
+        const start = addDays(end, -13);
+        // Insights compare this month so far with the SAME days of last month.
+        const thisYM = ymOf(end);
+        const lastYM = shiftYM(thisYM, -1);
+        const lastEnd = dayInMonth(lastYM, Number(end.slice(8, 10)));
+        const [rows, needRows, wantRows, monthlyCatRows, thisCats, lastCats, biggest] = await Promise.all([
+          dailyTotalsForPeriod(periodId),
+          sumByCategory(periodId, 'need'),
+          sumByCategory(periodId, 'want'),
+          sumByCategoryForMonth(ym),
+          sumByCategoryBetween(`${thisYM}-01`, end),
+          sumByCategoryBetween(`${lastYM}-01`, lastEnd),
+          biggestExpenseBetween(`${thisYM}-01`, end),
+        ]);
+        if (cancelled) return;
+        setInsights(buildInsights({ thisMonth: thisCats, lastMonth: lastCats, biggest }));
+        const totalsByDay = Object.fromEntries(rows.map((r) => [r.day, r.total]));
+        setTrend(buildDailySeries(start, end, totalsByDay));
+        setNeedCats(needRows);
+        setWantCats(wantRows);
+        setMonthCats(monthlyCatRows);
+      } catch (err) {
+        console.error('[dashboard] data load failed:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [periodId, ym, version]);
 
   if (!period || !derived) {
     return (
@@ -150,13 +182,6 @@ export default function DashboardScreen() {
     ringEmpty = 'Nothing yet';
   }
 
-  // Right-hand pie: what actually happened in the selected MONTH - money spent
-  // on Needs, on Wants, and moved into Savings that month.
-  const monthSegments = [
-    { label: 'Needs', color: theme.colors.needs, value: monthData.need },
-    { label: 'Wants', color: theme.colors.wants, value: monthData.want },
-    { label: 'Savings', color: theme.colors.savings, value: monthData.savings },
-  ];
   const accountStartYM = ymOf(period.start_date);
   const canPrev = ym > accountStartYM; // don't go before the account existed
   const canNext = ym < currentYM(); // don't browse into the future
@@ -184,6 +209,8 @@ export default function DashboardScreen() {
           incomeCents={period.income_cents}
           spentCents={spendableSpent}
           periodType={period.period_type}
+          hideAmounts={hideAmounts}
+          onToggleHide={() => setHideAmounts(!hideAmounts)}
         />
       </View>
 
@@ -194,6 +221,9 @@ export default function DashboardScreen() {
         onPress={() => router.push('/budget-edit')}
         style={{ marginBottom: theme.spacing.md }}
       />
+
+      {/* Bills overdue or due within a week (hidden when there are none) */}
+      <BillsDueCard version={version} style={{ marginBottom: theme.spacing.md }} />
 
       {/* Hero: breakdown ring (with dropdown) on the left, monthly pie right */}
       <Card style={{ marginBottom: theme.spacing.md }}>
@@ -211,16 +241,15 @@ export default function DashboardScreen() {
             />
           </View>
 
-          {/* Right: month-by-month pie (browse with the arrows) */}
+          {/* Right: top spending categories this month */}
           <View style={styles.heroCol}>
-            <MonthlyPie
+            <TopCategories
               label={monthLabel(ym)}
-              segments={monthSegments}
+              rows={monthCats}
               canPrev={canPrev}
               canNext={canNext}
               onPrev={() => setYm(shiftYM(ym, -1))}
               onNext={() => setYm(shiftYM(ym, 1))}
-              size={116}
             />
           </View>
         </View>
@@ -237,6 +266,9 @@ export default function DashboardScreen() {
           <Text style={[theme.typography.h2, { color: theme.colors.text }]}>{formatCents(periodSpentCents)}</Text>
         </Card>
       </View>
+
+      {/* Plain-language insights about this month */}
+      <InsightsCard insights={insights} style={{ marginBottom: theme.spacing.md }} />
 
       {/* Spending trend line (last 14 days) */}
       <Card style={{ marginBottom: theme.spacing.md }}>

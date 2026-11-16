@@ -30,6 +30,8 @@ export default function DateStepper({ value, onChange }) {
         justifyContent: 'space-between',
         backgroundColor: theme.colors.surfaceAlt,
         borderRadius: theme.radius.md,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
         paddingHorizontal: theme.spacing.sm,
         paddingVertical: 6,
       }}

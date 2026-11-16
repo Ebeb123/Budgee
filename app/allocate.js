@@ -22,7 +22,8 @@ import { useRouter } from 'expo-router';
 import AmountInput from '@/components/AmountInput';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
-import Screen from '@/components/Screen';
+import Sheet from '@/components/Sheet';
+import * as haptics from '@/lib/haptics';
 import { formatCents, toCents } from '@/services/money';
 import { crossedMilestones, quickAllocations } from '@/services/savings';
 import { addContribution } from '@/repositories/goalRepo';
@@ -40,7 +41,7 @@ export default function Allocate() {
   // No priority goal yet -> send them to create one instead.
   if (!activeGoal) {
     return (
-      <Screen title="Add to goal">
+      <Sheet title="Add to goal">
         <Card style={{ gap: theme.spacing.md }}>
           <Text style={[theme.typography.body, { color: theme.colors.textMuted }]}>
             You don't have a priority goal yet. Create one, then come back to move savings into it.
@@ -48,7 +49,7 @@ export default function Allocate() {
           <Button title="Create a goal" onPress={() => router.replace('/goal-edit')} />
           <Button title="Close" variant="secondary" onPress={() => router.back()} />
         </Card>
-      </Screen>
+      </Sheet>
     );
   }
 
@@ -76,6 +77,7 @@ export default function Allocate() {
         periodId: period?.id ?? null,
         amountCents: applyCents,
       });
+      haptics.success();
       await refresh();
 
       const crossed = crossedMilestones(prevSaved, prevSaved + applyCents, activeGoal.target_cents);
@@ -95,7 +97,7 @@ export default function Allocate() {
   }
 
   return (
-    <Screen title="Add to goal">
+    <Sheet title="Add to goal">
       {/* Context: what we're funding and how much is free to move */}
       <Card style={{ gap: 6, marginBottom: theme.spacing.md }}>
         <Text style={[theme.typography.label, { color: theme.colors.textMuted }]}>PRIORITY GOAL</Text>
@@ -135,7 +137,7 @@ export default function Allocate() {
                       styles.quick,
                       {
                         backgroundColor: selected ? theme.colors.accent : theme.colors.surfaceAlt,
-                        borderColor: selected ? theme.colors.accent : theme.colors.border,
+                        borderColor: selected ? theme.colors.accent : theme.colors.glassBorder,
                       },
                     ]}
                   >
@@ -188,7 +190,7 @@ export default function Allocate() {
           </View>
         </>
       )}
-    </Screen>
+    </Sheet>
   );
 }
 

@@ -19,8 +19,8 @@ export const spacing = {
 export const radius = {
   sm: 8,
   md: 12,
-  lg: 20,
-  xl: 28,
+  lg: 24,
+  xl: 30,
   pill: 999, // fully rounded (for pills / toggles)
 };
 

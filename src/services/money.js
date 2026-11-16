@@ -41,6 +41,22 @@ function groupThousands(intStr) {
   return intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
+// ---------------------------------------------------------------------------
+// HIDE AMOUNTS (privacy)
+// ---------------------------------------------------------------------------
+// When the eye toggle on the dashboard is on, every formatted amount shows as
+// "₱••••" instead of the real number. The flag lives here (not in React state)
+// so every existing formatCents() call respects it without changing call
+// sites. ThemeProvider flips it and then re-renders the app (every screen reads
+// useTheme(), so they all pick up the change at once).
+// ---------------------------------------------------------------------------
+let amountsHidden = false;
+
+/** Turn amount masking on/off. Called by ThemeProvider only. */
+export function setAmountsHidden(hidden) {
+  amountsHidden = !!hidden;
+}
+
 /**
  * Format centavos for display, e.g. 123456 -> "₱1,234.56".
  * We format manually instead of relying on Number.toLocaleString because the
@@ -55,6 +71,7 @@ function groupThousands(intStr) {
  */
 export function formatCents(cents, opts = {}) {
   const { symbol = true, showSign = false } = opts;
+  if (amountsHidden) return `${symbol ? '₱' : ''}••••`;
   const negative = cents < 0;
   const abs = Math.abs(Math.round(cents));
 

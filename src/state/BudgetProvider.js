@@ -15,6 +15,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { bucketSummary, computeSplit } from '@/services/budget';
+import { postDueRecurring } from '@/services/recurringService';
 import { availableSavingsCents } from '@/services/savings';
 import { monthsElapsed, todayISO } from '@/utils/date';
 import { getActivePeriod } from '@/repositories/budgetRepo';
@@ -33,6 +34,9 @@ export function BudgetProvider({ children }) {
   const [activeGoal, setActiveGoal] = useState(null);
   const [activeGoalSavedCents, setActiveGoalSavedCents] = useState(0);
   const [contributedCents, setContributedCents] = useState(0);
+  // Ticks after every refresh, so screens with their own extra queries (the
+  // dashboard charts) know to reload without calling refresh() themselves.
+  const [version, setVersion] = useState(0);
 
   /**
    * Re-read everything from the database. Called on mount and by screens after
@@ -50,6 +54,13 @@ export function BudgetProvider({ children }) {
         setActiveGoalSavedCents(0);
         setContributedCents(0);
         return;
+      }
+      // Log any recurring expenses (rent, bills...) that have come due, so the
+      // numbers below already include them.
+      try {
+        await postDueRecurring(p.id);
+      } catch (err) {
+        console.error('[budget] recurring expenses failed:', err);
       }
       const [buckets, goal, today, contributed] = await Promise.all([
         sumByBucket(p.id),
@@ -69,6 +80,7 @@ export function BudgetProvider({ children }) {
       console.error('[budget] refresh failed:', err);
     } finally {
       setLoading(false);
+      setVersion((v) => v + 1);
     }
   }, []);
 
@@ -114,8 +126,9 @@ export function BudgetProvider({ children }) {
       activeGoal,
       activeGoalSavedCents,
       refresh,
+      version,
     }),
-    [loading, period, derived, todaySpentCents, activeGoal, activeGoalSavedCents, refresh],
+    [loading, period, derived, todaySpentCents, activeGoal, activeGoalSavedCents, refresh, version],
   );
 
   return <BudgetContext.Provider value={value}>{children}</BudgetContext.Provider>;

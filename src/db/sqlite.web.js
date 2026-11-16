@@ -4,11 +4,24 @@
 // On phones the app uses expo-sqlite. In the browser this file provides the
 // same API (openDatabaseSync / openDatabaseAsync and the *Sync / *Async
 // methods the app calls), backed by sql.js — real SQLite compiled to
-// WebAssembly, loaded from /public. Data is saved in the visitor's browser
-// (localStorage), so every visitor gets their own private copy of the demo.
+// WebAssembly, loaded from /public. Data is saved in this browser
+// (localStorage), so every visitor gets their own private copy.
 // ---------------------------------------------------------------------------
 
-const STORAGE_PREFIX = 'demo-sqlite:';
+const STORAGE_PREFIX = 'budgee-sqlite:';
+
+// The old web demo stored auto-loaded sample data under this prefix. Drop it
+// once so every browser starts clean (sample data is now opt-in).
+const LEGACY_PREFIX = 'demo-sqlite:';
+if (typeof window !== 'undefined') {
+  try {
+    Object.keys(window.localStorage)
+      .filter((k) => k.startsWith(LEGACY_PREFIX))
+      .forEach((k) => window.localStorage.removeItem(k));
+  } catch (e) {
+    /* storage blocked - nothing to clean */
+  }
+}
 let SQL = null;
 let loading = null;
 const open = {}; // name -> sql.js Database
@@ -74,7 +87,7 @@ function saveNow(name) {
   try {
     window.localStorage.setItem(STORAGE_PREFIX + name, toBase64(db.export()));
   } catch (e) {
-    console.warn('[demo] could not save data in this browser:', e && e.message);
+    console.warn('[db] could not save data in this browser:', e && e.message);
   }
   try { db.exec('PRAGMA foreign_keys = ON;'); } catch (e) { /* export() resets pragmas */ }
 }
@@ -197,7 +210,7 @@ export async function openDatabaseAsync(name) {
   return makeDatabase(name);
 }
 
-/** Wipes the saved demo data in this browser (used by the "Reset demo" button). */
+/** Wipes the saved data in this browser (Settings -> "Erase data in this browser"). */
 export function resetDatabase(name) {
   try { window.localStorage.removeItem(STORAGE_PREFIX + name); } catch (e) { /* ignore */ }
   if (open[name]) { try { open[name].close(); } catch (e) { /* ignore */ } delete open[name]; }

@@ -38,7 +38,23 @@
           }
         }
       ],
-      "expo-sqlite"
+      [
+        "expo-notifications",
+        {
+          "color": "#5A9216",
+          "defaultChannel": "bills"
+        }
+      ],
+      "expo-sqlite",
+      "expo-status-bar",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Budgee uses your photos only when you pick a logo for a biller.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false
@@ -52,7 +68,7 @@
     "web": {
       "output": "single",
       "favicon": "./assets/favicon.png",
-      "name": "Budgee \u2014 Expense Tracker (Demo)"
+      "name": "Budgee — Expense Tracker"
     }
   }
 }

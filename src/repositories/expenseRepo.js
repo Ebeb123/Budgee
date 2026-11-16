@@ -18,13 +18,14 @@ import { getDb } from '@/db/database';
  * @param {number} e.amountCents
  * @param {string|null} e.note
  * @param {string} e.spentAt      'YYYY-MM-DD'
+ * @param {number|null} [e.recurringId]  set when logged automatically by a recurring expense
  * @returns {Promise<number>} new expense id
  */
-export async function addExpense({ periodId, categoryId, bucket, amountCents, note, spentAt }) {
+export async function addExpense({ periodId, categoryId, bucket, amountCents, note, spentAt, recurringId = null }) {
   const res = await getDb().runAsync(
-    `INSERT INTO expenses (period_id, category_id, bucket, amount_cents, note, spent_at)
-     VALUES (?, ?, ?, ?, ?, ?);`,
-    [periodId, categoryId ?? null, bucket, amountCents, note ?? null, spentAt],
+    `INSERT INTO expenses (period_id, category_id, bucket, amount_cents, note, spent_at, recurring_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?);`,
+    [periodId, categoryId ?? null, bucket, amountCents, note ?? null, spentAt, recurringId],
   );
   return res.lastInsertRowId;
 }
@@ -208,4 +209,79 @@ export async function dailyTotalsForPeriod(periodId) {
       ORDER BY spent_at ASC;`,
     [periodId],
   );
+}
+
+// --- Insights + streak queries ----------------------------------------------
+
+/**
+ * Total spent per category between two days (inclusive), biggest first.
+ * @param {string} startISO
+ * @param {string} endISO
+ * @returns {Promise<{ category_id:number|null, name:string|null, total:number }[]>}
+ */
+export async function sumByCategoryBetween(startISO, endISO) {
+  return getDb().getAllAsync(
+    `SELECT e.category_id AS category_id, c.name AS name, COALESCE(c.color, '#888888') AS color, COALESCE(SUM(e.amount_cents), 0) AS total
+       FROM expenses e
+       LEFT JOIN categories c ON c.id = e.category_id
+      WHERE e.spent_at BETWEEN ? AND ? AND e.deleted_at IS NULL
+      GROUP BY e.category_id
+      ORDER BY total DESC;`,
+    [startISO, endISO],
+  );
+}
+
+/**
+ * Top categories for a given YYYY-MM month, sorted by total desc.
+ * @param {string} ym  e.g. "2026-11"
+ * @returns {Promise<{ name:string, color:string, total:number }[]>}
+ */
+export async function sumByCategoryForMonth(ym) {
+  const start = `${ym}-01`;
+  const end = `${ym}-31`;
+  return getDb().getAllAsync(
+    `SELECT COALESCE(c.name, 'Uncategorized') AS name, COALESCE(c.color, '#888888') AS color,
+            COALESCE(SUM(e.amount_cents), 0) AS total
+       FROM expenses e
+       LEFT JOIN categories c ON c.id = e.category_id
+      WHERE e.spent_at BETWEEN ? AND ? AND e.deleted_at IS NULL
+      GROUP BY e.category_id
+      ORDER BY total DESC;`,
+    [start, end],
+  );
+}
+
+/**
+ * The single biggest expense between two days (inclusive), or null.
+ * @returns {Promise<{ amount_cents:number, note:string|null, spent_at:string, category_name:string|null } | null>}
+ */
+export async function biggestExpenseBetween(startISO, endISO) {
+  const row = await getDb().getFirstAsync(
+    `SELECT e.amount_cents, e.note, e.spent_at, c.name AS category_name
+       FROM expenses e
+       LEFT JOIN categories c ON c.id = e.category_id
+      WHERE e.spent_at BETWEEN ? AND ? AND e.deleted_at IS NULL
+      ORDER BY e.amount_cents DESC, e.id DESC
+      LIMIT 1;`,
+    [startISO, endISO],
+  );
+  return row ?? null;
+}
+
+/**
+ * The most recent distinct days that have at least one expense, newest first.
+ * Feeds the logging streak.
+ * @param {number} [limit=400]
+ * @returns {Promise<string[]>}
+ */
+export async function recentExpenseDays(limit = 400) {
+  const rows = await getDb().getAllAsync(
+    `SELECT DISTINCT spent_at AS day
+       FROM expenses
+      WHERE deleted_at IS NULL
+      ORDER BY spent_at DESC
+      LIMIT ?;`,
+    [limit],
+  );
+  return rows.map((r) => r.day);
 }

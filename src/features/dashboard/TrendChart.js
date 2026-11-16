@@ -71,7 +71,26 @@ export default function TrendChart({ data, height = 130 }) {
     return { x, y };
   });
 
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x} ${p.y}`).join(' ');
+  // Catmull-Rom → cubic Bézier (tension 0.4): smooth curve through every point.
+  function smoothPath(pts) {
+    if (pts.length < 2) return `M${pts[0].x} ${pts[0].y}`;
+    let d = `M${pts[0].x} ${pts[0].y}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(0, i - 1)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[Math.min(pts.length - 1, i + 2)];
+      const t = 0.4;
+      const cp1x = p1.x + (p2.x - p0.x) * t;
+      const cp1y = p1.y + (p2.y - p0.y) * t;
+      const cp2x = p2.x - (p3.x - p1.x) * t;
+      const cp2y = p2.y - (p3.y - p1.y) * t;
+      d += ` C${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p2.x} ${p2.y}`;
+    }
+    return d;
+  }
+
+  const linePath = smoothPath(points);
   const areaPath = `${linePath} L${points[n - 1].x} ${height} L${points[0].x} ${height} Z`;
   const last = points[n - 1];
 

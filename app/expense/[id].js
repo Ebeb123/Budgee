@@ -14,9 +14,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import Card from '@/components/Card';
 import Screen from '@/components/Screen';
+import { useToast } from '@/components/Toast';
+import * as haptics from '@/lib/haptics';
 import ExpenseForm from '@/features/expenses/ExpenseForm';
 import { listCategories } from '@/repositories/categoryRepo';
-import { getExpenseById, updateExpense, softDeleteExpense } from '@/repositories/expenseRepo';
+import { getExpenseById, restoreExpense, softDeleteExpense, updateExpense } from '@/repositories/expenseRepo';
 import { useBudget } from '@/state/BudgetProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -26,6 +28,7 @@ export default function EditExpense() {
   const { id } = useLocalSearchParams();
   const expenseId = Number(id);
   const { refresh } = useBudget();
+  const toast = useToast();
 
   const [categories, setCategories] = useState([]);
   const [initial, setInitial] = useState(null);
@@ -58,7 +61,9 @@ export default function EditExpense() {
   async function handleSave(values) {
     setSaving(true);
     try {
-      await updateExpense(expenseId, values);
+      const { saveAsQuickAdd, ...fields } = values;
+      await updateExpense(expenseId, fields);
+      haptics.success();
       await refresh();
       router.back();
     } catch (err) {
@@ -78,8 +83,18 @@ export default function EditExpense() {
           setSaving(true);
           try {
             await softDeleteExpense(expenseId);
+            haptics.warning();
             await refresh();
             router.back();
+            // The row is only soft-deleted, so it can come straight back.
+            toast.show({
+              message: 'Expense deleted',
+              actionLabel: 'Undo',
+              onAction: async () => {
+                await restoreExpense(expenseId);
+                await refresh();
+              },
+            });
           } catch (err) {
             console.error('[edit] delete failed:', err);
             Alert.alert('Could not delete', 'Please try again.');

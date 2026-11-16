@@ -20,7 +20,8 @@ import { useRouter } from 'expo-router';
 import AmountInput from '@/components/AmountInput';
 import Button from '@/components/Button';
 import Card from '@/components/Card';
-import Screen from '@/components/Screen';
+import Sheet from '@/components/Sheet';
+import * as haptics from '@/lib/haptics';
 import SplitEditor from '@/features/budget/SplitEditor';
 import { validateSplit } from '@/services/budget';
 import { toCents } from '@/services/money';
@@ -46,14 +47,14 @@ export default function BudgetEdit() {
 
   if (!period) {
     return (
-      <Screen title="Edit money">
+      <Sheet title="Edit money">
         <Card>
           <Text style={[theme.typography.body, { color: theme.colors.textMuted }]}>
             No account to edit yet.
           </Text>
         </Card>
         <Button title="Close" variant="secondary" onPress={() => router.back()} style={{ marginTop: theme.spacing.md }} />
-      </Screen>
+      </Sheet>
     );
   }
 
@@ -90,6 +91,7 @@ export default function BudgetEdit() {
         });
       }
 
+      haptics.success();
       await refresh();
       router.back();
     } catch (err) {
@@ -100,7 +102,7 @@ export default function BudgetEdit() {
   }
 
   return (
-    <Screen title="Edit money">
+    <Sheet title="Edit money">
       <Card style={{ gap: theme.spacing.md, marginBottom: theme.spacing.md }}>
         <Text style={[theme.typography.label, { color: theme.colors.textMuted }]}>TOTAL MONEY</Text>
         <AmountInput value={incomeText} onChangeText={setIncomeText} />
@@ -126,6 +128,6 @@ export default function BudgetEdit() {
         <Button title="Cancel" variant="secondary" onPress={() => router.back()} style={{ flex: 1 }} disabled={saving} />
         <Button title={saving ? 'Saving…' : 'Save'} onPress={save} disabled={!canSave} style={{ flex: 2 }} />
       </View>
-    </Screen>
+    </Sheet>
   );
 }

@@ -88,5 +88,5 @@ export default function SplitEditor({ incomeCents, value, onChange }) {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
   dot: { width: 12, height: 12, borderRadius: 6, marginRight: 10 },
-  pctBox: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1 },
+  pctBox: { flexDirection: 'row', alignItems: 'center', flexShrink: 0, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1 },
 });

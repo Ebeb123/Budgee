@@ -7,12 +7,13 @@
 //
 // When editing, the top card shows the status, lets you copy the account
 // number (handy when paying in GCash or a bank app) and has "Mark as paid",
-// which moves the due date to next month and can log the amount as an expense
-// under Bills. Every change re-schedules the phone reminders.
+// which moves the due date to next month. You choose whether to deduct it from
+// your funds (logged as an expense under Bills) or not; the choice is
+// remembered. Every change re-schedules the phone reminders.
 // ---------------------------------------------------------------------------
 
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -37,6 +38,7 @@ import { addDays, formatDisplayDate, ordinal, todayISO } from '@/utils/date';
 import { createBill, deleteBill, getBill, listBillers, updateBill } from '@/repositories/billRepo';
 import { listCategories } from '@/repositories/categoryRepo';
 import { addExpense, softDeleteExpense } from '@/repositories/expenseRepo';
+import { getSetting, setSetting } from '@/repositories/settingsRepo';
 import { useBudget } from '@/state/BudgetProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -58,7 +60,9 @@ export default function BillEdit() {
   const [amountText, setAmountText] = useState('');
   const [dueDay, setDueDay] = useState(Number(today.slice(8, 10)));
   const [skipMonth, setSkipMonth] = useState('0'); // '1' = first due is the month after
-  const [logExpense, setLogExpense] = useState(true);
+  // 'deduct' = log the payment as an expense so it comes off your balance;
+  // 'keep' = just mark it paid (e.g. someone else paid it). Remembered.
+  const [payMode, setPayMode] = useState('deduct');
   const [original, setOriginal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -76,6 +80,14 @@ export default function BillEdit() {
         .catch((err) => console.error('[bill-edit] billers failed:', err));
     }, []),
   );
+
+  useEffect(() => {
+    getSetting('bill_pay_mode')
+      .then((v) => {
+        if (v === 'deduct' || v === 'keep') setPayMode(v);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isEdit) {
@@ -100,6 +112,8 @@ export default function BillEdit() {
   const amountCents = amountText.trim() ? toCents(amountText) : null;
   const amountValid = !amountText.trim() || (amountCents != null && amountCents > 0);
   const canSave = billerId != null && amountValid && !saving;
+  const deduct = payMode === 'deduct';
+  const canPay = !saving && amountValid && (!deduct || (amountCents != null && period != null));
 
   // Next due date: keep the saved one unless the due day changed.
   const dayChanged = !original || original.due_day !== dueDay;
@@ -140,7 +154,7 @@ export default function BillEdit() {
       const next = nextBillDue(original.due_day, original.due_date);
       let expenseId = null;
 
-      if (logExpense && amountCents && period) {
+      if (deduct && amountCents && period) {
         const cats = await listCategories();
         const cat = cats.find((x) => x.name === 'Bills') ?? cats.find((x) => x.bucket === 'need') ?? null;
         expenseId = await addExpense({
@@ -153,13 +167,14 @@ export default function BillEdit() {
         });
       }
       await updateBill(billId, { dueDate: next, lastPaidAt: today, amountCents });
+      setSetting('bill_pay_mode', payMode).catch(() => {});
       haptics.success();
       await refresh();
       syncBillReminders();
       router.back();
 
       toast.show({
-        message: `${original.biller_name} paid · next due ${formatDisplayDate(next)}`,
+        message: `${original.biller_name} paid${expenseId ? ` · ${formatCents(amountCents)} deducted` : ''} · next due ${formatDisplayDate(next)}`,
         actionLabel: 'Undo',
         duration: 6000,
         onAction: async () => {
@@ -264,22 +279,33 @@ export default function BillEdit() {
               </Pressable>
             ) : null}
 
-            {amountCents ? (
-              <View style={styles.rowBetween}>
-                <View style={{ flex: 1, paddingRight: theme.spacing.md }}>
-                  <Text style={[theme.typography.body, { color: c.text }]}>Log {formatCents(amountCents)} as an expense</Text>
-                  <Text style={[theme.typography.caption, { color: c.textMuted }]}>Under Bills, dated today</Text>
+            {/* Pay: deduct from my funds or not */}
+            <View style={{ gap: theme.spacing.sm }}>
+              <Text style={[theme.typography.label, { color: c.textMuted }]}>DEDUCT FROM MY FUNDS?</Text>
+              <Segmented
+                options={[
+                  { key: 'deduct', label: 'Yes, deduct' },
+                  { key: 'keep', label: "No, don't deduct" },
+                ]}
+                value={payMode}
+                onChange={setPayMode}
+              />
+              {deduct && !original.amount_cents ? (
+                <View>
+                  <Text style={[theme.typography.label, { color: c.textMuted, marginBottom: 6 }]}>AMOUNT PAID</Text>
+                  <AmountInput value={amountText} onChangeText={setAmountText} size="normal" />
                 </View>
-                <Switch
-                  value={logExpense}
-                  onValueChange={setLogExpense}
-                  trackColor={{ true: c.accent, false: c.border }}
-                  thumbColor={theme.scheme === 'dark' ? '#FFFFFF' : c.surface}
-                />
-              </View>
-            ) : null}
+              ) : null}
+              <Text style={[theme.typography.caption, { color: c.textMuted }]}>
+                {deduct
+                  ? amountCents
+                    ? `${formatCents(amountCents)} is logged under Bills today and taken off your balance.`
+                    : 'Enter how much you paid so it can be taken off your balance.'
+                  : 'Just marks it paid. Your balance stays the same.'}
+              </Text>
+            </View>
 
-            <Button title="Mark as paid" icon="checkmark-circle-outline" onPress={markPaid} disabled={saving || !amountValid} />
+            <Button title="Mark as paid" icon="checkmark-circle-outline" onPress={markPaid} disabled={!canPay} />
           </Card>
         ) : null}
 

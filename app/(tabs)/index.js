@@ -216,7 +216,7 @@ export default function DashboardScreen() {
 
       {/* Add / edit money (running total) */}
       <Button
-        title="+ Add / edit money"
+        title="+ Add money"
         variant="secondary"
         onPress={() => router.push('/budget-edit')}
         style={{ marginBottom: theme.spacing.md }}
